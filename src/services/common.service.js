@@ -13,7 +13,9 @@ cloudinary.config({
 // global error handler
 export const globalErrorHandler = (err, req, res, next) => {
     err.statusCode = err.statusCode || 500;
+    console.log(err)
     return res.status(err.statusCode).json({
+        success: false,
         status: err.statusCode,
         message: err.message
     });
@@ -23,6 +25,18 @@ export const asyncErrorHandler = (func) => {
     return (req, res, next) => {
         func(req, res, next).catch(err => next(err))
     }
+}
+
+export const sendError = (next, data, statusCode) => {
+    const customError = new CustomError(data, statusCode);
+    return next(customError)
+}
+export const sendSuccess = (res, data, statusCode) => {
+    const resData = {
+        success: true,
+        data
+    }
+    return res.status(statusCode).json(resData)
 }
 
 export const imageUploader = async (req, location) => {
@@ -46,7 +60,7 @@ export const imageUploader = async (req, location) => {
     }
 }
 
-export const multerUpload = (dirName) => {    
+export const multerUpload = (dirName) => {
     const storage = multer.diskStorage({
         destination: function (req, file, cb) {
             return cb(null, `./src/uploads/${dirName}`);

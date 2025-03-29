@@ -17,6 +17,7 @@ const userSchema = new mongoose.Schema({
     verified: { type: Boolean, default: false },
     ratings: { type: Number, default: 0 },
     totalRentals: { type: Number, default: 0 },
+    wishlist: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User', default: [], required: true }],
 }, { timestamps: true });
 
 const User = mongoose.model('User', userSchema);

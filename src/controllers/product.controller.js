@@ -2,7 +2,8 @@ import Product from "../models/product.model.js";
 import _ from 'lodash';
 import { asyncErrorHandler, imageUploader } from "../services/common.service.js";
 import CustomError from "../utils/customError.js";
-import mongoose from "mongoose";
+import mongoose, { isValidObjectId } from "mongoose";
+import User from "../models/user.model.js";
 
 export const addProduct = asyncErrorHandler(async (req, res, next) => {
     const { payload } = req.body;
@@ -99,18 +100,42 @@ export const uploadImage = asyncErrorHandler(async (req, res, next) => {
     return res.status(201).json({ data: imageURLs });
 })
 
-export const getProductById = async (req, res, next) => {
-    try {
+export const getProductById = asyncErrorHandler(async (req, res, next) => {
+    const { productId } = req.params;
+    if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+        return next(new CustomError("Product Not Found", 400))
+    }
+    const product = await Product.findOne({ _id: productId }).populate('address', 'city state pincode').populate('owner', 'name').lean();
+    res.status(200).json({ data: product });
+})
 
-        const { productId } = req.params;
-        if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
-            next(new CustomError("Product Not Found", 400))
-        }
-        const product = await Product.findOne({ _id: productId });
-        res.status(200).json({ data: product });
+export const changeWishlist = asyncErrorHandler(async (req, res, next) => {
+    const { productId } = req.params;
+    const userId = req.userDetails._id;
+    if (!isValidObjectId(productId) || !isValidObjectId(userId)) {
+        const customError = new CustomError('Product Not Found', 400);
+        return next(customError);
     }
-    catch (error) {
-        res.status(400).json({ data: error.message });
+
+    const user = await User.findById(userId);
+
+    const isWishlisted = user?.wishlist?.includes(productId);
+    if (isWishlisted) {
+        // Remove product from wishlist
+        user.wishlist = user.wishlist.filter(id => id.toString() !== productId);
+    } else {
+        // Add product to wishlist
+        user?.wishlist.push(productId);
     }
-}
+
+    await user.save();
+
+    return res.json({ success: true, added: !isWishlisted });
+})
+
+export const getWishlist = asyncErrorHandler(async (req, res, next) => {
+    const userId = req.userDetails._id;
+    const user = await User.findById(userId).select('+wishlist');
+    return res.json({ success: true, data: user.wishlist });
+})
 
