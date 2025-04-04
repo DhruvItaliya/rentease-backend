@@ -17,7 +17,7 @@ export const globalErrorHandler = (err, req, res, next) => {
     return res.status(err.statusCode).json({
         success: false,
         status: err.statusCode,
-        message: err.message
+        message: err.message,
     });
 }
 
@@ -27,10 +27,10 @@ export const asyncErrorHandler = (func) => {
     }
 }
 
-export const sendError = (next, data, statusCode) => {
+export const sendError = asyncErrorHandler(async (next, data, statusCode) => {
     const customError = new CustomError(data, statusCode);
     return next(customError)
-}
+})
 export const sendSuccess = (res, data, statusCode) => {
     const resData = {
         success: true,

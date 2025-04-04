@@ -1,10 +1,11 @@
 import Product from "../models/product.model.js";
 import _ from 'lodash';
-import { asyncErrorHandler, imageUploader } from "../services/common.service.js";
+import { asyncErrorHandler, imageUploader, sendSuccess } from "../services/common.service.js";
 import CustomError from "../utils/customError.js";
 import mongoose, { isValidObjectId } from "mongoose";
 import User from "../models/user.model.js";
-
+import Redis from "ioredis";
+const redis = new Redis();
 export const addProduct = asyncErrorHandler(async (req, res, next) => {
     const { payload } = req.body;
     const productObj = {
@@ -31,7 +32,13 @@ export const addProduct = asyncErrorHandler(async (req, res, next) => {
 
 export const getProducts = asyncErrorHandler(async (req, res, next) => {
     const { category, searchTerm } = req.query
-
+    let cacheData;
+    // if (!searchTerm && !category) {
+    //     cacheData = JSON.parse(await redis.get('product:all'));
+    //     if (cacheData) {
+    //         return sendSuccess(res, cacheData, 200);
+    //     }
+    // }
     let productsQuery = await Product.aggregate([
         {
             $lookup: {
@@ -87,6 +94,9 @@ export const getProducts = asyncErrorHandler(async (req, res, next) => {
             }
         }
     ])
+    // if (!searchTerm && !category && !cacheData) {
+    //     await redis.set('product:all', JSON.stringify(productsQuery));
+    // }
     return res.status(200).json({
         data: productsQuery
     })

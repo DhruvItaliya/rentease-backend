@@ -1,6 +1,7 @@
 import { asyncErrorHandler, sendError, sendSuccess } from "../services/common.service.js";
 import { isValidObjectId } from "mongoose";
 import Review from "../models/review.model.js";
+import { addToBatch } from "../services/queue.service.js";
 
 export const getReivews = asyncErrorHandler(async (req, res, next) => {
     const userId = req.userDetails._id;
@@ -29,9 +30,7 @@ export const addHelpfulVotes = asyncErrorHandler(async (req, res, next) => {
     if (!isValidObjectId(reviewId)) {
         return sendError(next, 'Review Not Found!', 400);
     }
-    const review = await Review.findOne({ _id: reviewId }).populate('user', 'name');
-    review.helpfulUsers.push(userId);
-    review.helpfulCount++;
-    await review.save();
-    return sendSuccess(res, review, 200)
-})
+    console.log(reviewId)
+    addToBatch('helpful-vote', reviewId, userId)
+    return sendSuccess(res, userId, 200)
+})  

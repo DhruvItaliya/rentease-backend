@@ -5,6 +5,7 @@ import requestRoutes from './request/request.route.js'
 import agreementRoutes from './agreement/agreement.route.js'
 import userRoutes from './user/user.route.js'
 import reviewRoutes from './review/review.route.js'
+import dashboardRoutes from './dashboard/dashboard.route.js'
 
 const router = express.Router();
 
@@ -14,5 +15,6 @@ router.use('/product', productRoutes)
 router.use('/request', requestRoutes)
 router.use('/rentals', agreementRoutes)
 router.use('/review', reviewRoutes)
+router.use('/dashboard', dashboardRoutes)
 
 export default router;  

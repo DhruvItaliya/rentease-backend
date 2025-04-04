@@ -3,8 +3,9 @@ import bcrypt from 'bcryptjs';
 import User from '../models/user.model.js';
 import CustomError from "../utils/customError.js";
 import generateToken from '../utils/common.utils.js'
+import sendMail from "../services/email.service.js";
+import { getWelcomeEmail } from "../utils/email.template.js";
 import Address from "../models/address.model.js";
-import mongoose from "mongoose";
 
 export const signUp = asyncErrorHandler(async (req, res, next) => {
     const payload = req.body;
@@ -36,6 +37,7 @@ export const signUp = asyncErrorHandler(async (req, res, next) => {
     }
 
     await User.create(userObj);
+    await sendMail({to:payload.email,subject:'Welcome to RentEase!',html: getWelcomeEmail(payload.name.fname)})
     return res.status(201).json({ data: "Account created successfully!" });
 })
 
