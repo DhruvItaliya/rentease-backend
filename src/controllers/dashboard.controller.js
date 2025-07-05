@@ -1,640 +1,229 @@
-import { asyncErrorHandler, sendSuccess } from "../services/common.service.js";
+import Product from "../models/product.model.js";
 import Request from "../models/request.model.js";
-import Review from "../models/review.model.js";
 import User from "../models/user.model.js";
-// export const getDashboard = asyncErrorHandler(async (req, res) => {
-//     const { filter } = req.query;
-//     const dateRange = getDateRange(filter);
-//     if (!dateRange) return res.status(400).json({ error: 'Invalid filter' });
+import { asyncErrorHandler } from "../services/common.service.js";
 
-//     const { startDate, endDate } = dateRange;
-
-//     // Fetch revenue
-//     const revenueData = await Request.aggregate([
-//         {
-//             $match: {
-//                 status: { $in: ['done', 'returned'] },
-//                 createdAt: { $gte: startDate, $lte: endDate }
-//             }
-//         },
-//         { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, revenue: { $sum: '$amount' } } },
-//         { $sort: { _id: 1 } }
-//     ]);
-
-//     // Fetch category trends
-//     const categoryTrendsData = await Request.aggregate([
-//         {
-//             $match: { createdAt: { $gte: startDate, $lte: endDate } }
-//         },
-//         {
-//             $group: {
-//                 _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-//                 Electronics: { $sum: { $cond: [{ $eq: ['$category', 'Electronics'] }, 1, 0] } },
-//                 Sports: { $sum: { $cond: [{ $eq: ['$category', 'Sports'] }, 1, 0] } },
-//                 Tools: { $sum: { $cond: [{ $eq: ['$category', 'Tools'] }, 1, 0] } },
-//                 Home: { $sum: { $cond: [{ $eq: ['$category', 'Home'] }, 1, 0] } }
-//             }
-//         },
-//         { $sort: { _id: 1 } }
-//     ]);
-
-//     // Fetch rental trends
-//     const rentalTrendsData = await Request.aggregate([
-//         {
-//             $match: { createdAt: { $gte: startDate, $lte: endDate } }
-//         },
-//         {
-//             $group: {
-//                 _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-//                 active: { $sum: { $cond: [{ $eq: ['$status', 'ongoing'] }, 1, 0] } },
-//                 completed: { $sum: { $cond: [{ $in: ['$status', ['done', 'returned']] }, 1, 0] } }
-//             }
-//         },
-//         { $sort: { _id: 1 } }
-//     ]);
-
-//     // Fetch rating distribution
-//     const ratingDistribution = await Review.aggregate([
-//         { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
-//         { $group: { _id: '$rating', count: { $sum: 1 } } }
-//     ]).then(data =>
-//         [5, 4, 3, 2, 1].map(r => ({ rating: `${r}★`, count: data.find(d => d._id === r)?.count || 0 }))
-//     );
-
-//     // Fetch category data
-//     const categoryData = await Request.aggregate([
-//         {
-//             $match: { createdAt: { $gte: startDate, $lte: endDate } }
-//         },
-//         {
-//             $group: {
-//                 _id: '$category',
-//                 value: { $sum: 1 }
-//             }
-//         }
-//     ]).then(data => data.map(d => ({ name: d._id, value: d.value })));
-
-//     // Fetch stats data
-//     const totalRevenue = revenueData.reduce((acc, val) => acc + val.revenue, 0);
-//     const activeRentals = await Request.countDocuments({
-//         status: 'ongoing',
-//         createdAt: { $gte: startDate, $lte: endDate }
-//     });
-//     const totalUsers = await User.countDocuments({
-//         createdAt: { $gte: startDate, $lte: endDate }
-//     });
-//     const avgRating = await Review.aggregate([
-//         { $match: { createdAt: { $gte: startDate, $lte: endDate } } },
-//         { $group: { _id: null, avgRating: { $avg: '$rating' } } }
-//     ]).then(res => res.length ? res[0].avgRating.toFixed(1) : '0.0');
-
-//     const statsData = [
-//         { title: 'Total Revenue', value: `₹${totalRevenue}`, change: '+2.1%', isPositive: true, period: filter, icon: '💰' },
-//         { title: 'Active Rentals', value: activeRentals, change: '+5.6%', isPositive: true, period: filter, icon: '🛒' },
-//         { title: 'Total Users', value: totalUsers, change: '+4.2%', isPositive: true, period: filter, icon: '👥' },
-//         { title: 'Avg. Rating', value: avgRating, change: '-0.1%', isPositive: false, period: filter, icon: '⭐' }
-//     ];
-
-//     sendSuccess(res, {
-//         revenueData,
-//         categoryTrendsData,
-//         rentalTrendsData,
-//         ratingDistribution,
-//         categoryData,
-//         statsData
-//     }, 200);
-// })
-
-// const getDateRange = (filter) => {
-//     const now = new Date();
-//     let startDate;
-
-//     if (filter === 'weekly') {
-//         startDate = new Date(now);
-//         startDate.setDate(now.getDate() - 7);
-//     } else if (filter === 'monthly') {
-//         startDate = new Date(now);
-//         startDate.setMonth(now.getMonth() - 1);
-//     } else if (filter === 'yearly') {
-//         startDate = new Date(now);
-//         startDate.setFullYear(now.getFullYear() - 1);
-//     } else {
-//         return null;
-//     }
-
-//     return { startDate, endDate: now };
-// };
-
-// models imports are already defined in your schema files
-import Product from '../models/product.model.js';
-import Agreement from '../models/agreement.model.js';
-
-export const getStats = async (req, res) => {
+// Enhanced Dashboard Stats API with time period filtering
+export const dashboardStats = asyncErrorHandler(async (req, res) => {
     try {
-        const { period = 'weekly' } = req.query;
+        // Get time period from query params (default to monthly)
+        const timePeriod = req.query.period || 'monthly'; // Options: 'weekly', 'monthly', 'yearly'
 
-        // Define date ranges for current period
-        const now = new Date();
-        let currentStartDate;
-        let previousStartDate;
-        let previousEndDate;
+        const currentDate = new Date();
 
-        switch (period) {
+        // Calculate date ranges based on selected time period
+        let currentPeriodStart, currentPeriodEnd;
+        let previousPeriodStart, previousPeriodEnd;
+
+        switch (timePeriod) {
             case 'weekly':
-                // Current period: last 7 days
-                currentStartDate = new Date(now);
-                currentStartDate.setDate(now.getDate() - 7);
-                
-                // Previous period: 7 days before current period
-                previousEndDate = new Date(currentStartDate);
-                previousEndDate.setDate(previousEndDate.getDate() - 1);
-                previousStartDate = new Date(previousEndDate);
-                previousStartDate.setDate(previousEndDate.getDate() - 7);
-                break;
-                
-            case 'monthly':
-                // Current period: last 30 days
-                currentStartDate = new Date(now);
-                currentStartDate.setMonth(now.getMonth() - 1);
-                
-                // Previous period: 30 days before current period
-                previousEndDate = new Date(currentStartDate);
-                previousEndDate.setDate(previousEndDate.getDate() - 1);
-                previousStartDate = new Date(previousEndDate);
-                previousStartDate.setMonth(previousEndDate.getMonth() - 1);
-                break;
-                
-            case 'yearly':
-                // Current period: last 365 days
-                currentStartDate = new Date(now);
-                currentStartDate.setFullYear(now.getFullYear() - 1);
-                
-                // Previous period: 365 days before current period
-                previousEndDate = new Date(currentStartDate);
-                previousEndDate.setDate(previousEndDate.getDate() - 1);
-                previousStartDate = new Date(previousEndDate);
-                previousStartDate.setFullYear(previousEndDate.getFullYear() - 1);
-                break;
-                
-            default:
-                // Default to weekly
-                currentStartDate = new Date(now);
-                currentStartDate.setDate(now.getDate() - 7);
-                previousEndDate = new Date(currentStartDate);
-                previousEndDate.setDate(previousEndDate.getDate() - 1);
-                previousStartDate = new Date(previousEndDate);
-                previousStartDate.setDate(previousEndDate.getDate() - 7);
-        }
+                // Calculate the start of the current week (Sunday as first day of week)
+                currentPeriodStart = new Date(currentDate);
+                currentPeriodStart.setDate(currentPeriodStart.getDate() - currentPeriodStart.getDay());
+                currentPeriodStart.setHours(0, 0, 0, 0);
 
-        // Current Period Metrics
-        
-        // 1. Current Total Revenue
-        const currentRevenue = await Agreement.aggregate([
-            { $match: { createdAt: { $gte: currentStartDate, $lte: now } } },
-            { $group: { _id: null, total: { $sum: "$total" } } }
-        ]);
-        const currentRevenueTotal = currentRevenue[0]?.total || 0;
+                // Previous week
+                previousPeriodStart = new Date(currentPeriodStart);
+                previousPeriodStart.setDate(previousPeriodStart.getDate() - 7);
 
-        // 2. Current Active Rentals
-        const currentActiveRentals = await Request.countDocuments({
-            status: { $in: ['approved', 'pending'] },
-            createdAt: { $gte: currentStartDate, $lte: now }
-        });
-
-        // 3. Current Total Users
-        const currentTotalUsers = await User.countDocuments({
-            createdAt: { $gte: currentStartDate, $lte: now }
-        });
-
-        // 4. Current Average Rating
-        const currentRatings = await Review.aggregate([
-            { $match: { createdAt: { $gte: currentStartDate, $lte: now } } },
-            { $group: { _id: null, avgRating: { $avg: "$rating" } } }
-        ]);
-        const currentAvgRating = currentRatings[0]?.avgRating || 0;
-
-        // Previous Period Metrics
-        
-        // 1. Previous Total Revenue
-        const previousRevenue = await Agreement.aggregate([
-            { $match: { createdAt: { $gte: previousStartDate, $lte: previousEndDate } } },
-            { $group: { _id: null, total: { $sum: "$total" } } }
-        ]);
-        const previousRevenueTotal = previousRevenue[0]?.total || 0;
-
-        // 2. Previous Active Rentals
-        const previousActiveRentals = await Request.countDocuments({
-            status: { $in: ['approved', 'pending'] },
-            createdAt: { $gte: previousStartDate, $lte: previousEndDate }
-        });
-
-        // 3. Previous Total Users
-        const previousTotalUsers = await User.countDocuments({
-            createdAt: { $gte: previousStartDate, $lte: previousEndDate }
-        });
-
-        // 4. Previous Average Rating
-        const previousRatings = await Review.aggregate([
-            { $match: { createdAt: { $gte: previousStartDate, $lte: previousEndDate } } },
-            { $group: { _id: null, avgRating: { $avg: "$rating" } } }
-        ]);
-        const previousAvgRating = previousRatings[0]?.avgRating || 0;
-
-        // Calculate percentage changes
-        
-        // Helper function to calculate percentage change
-        const calculateChange = (current, previous) => {
-            if (previous === 0) {
-                return current > 0 ? '+100.0%' : '0.0%';
-            }
-            const change = ((current - previous) / previous) * 100;
-            return (change >= 0 ? '+' : '') + change.toFixed(1) + '%';
-        };
-
-        const revenueChange = calculateChange(currentRevenueTotal, previousRevenueTotal);
-        const rentalsChange = calculateChange(currentActiveRentals, previousActiveRentals);
-        const usersChange = calculateChange(currentTotalUsers, previousTotalUsers);
-        const ratingsChange = calculateChange(currentAvgRating, previousAvgRating);
-
-        // Determine if changes are positive
-        const isRevenuePositive = !revenueChange.startsWith('-');
-        const isRentalsPositive = !rentalsChange.startsWith('-');
-        const isUsersPositive = !usersChange.startsWith('-');
-        const isRatingPositive = !ratingsChange.startsWith('-');
-
-        const stats = [
-            {
-                title: 'Total Revenue',
-                value: '₹' + currentRevenueTotal.toLocaleString('en-IN'),
-                change: revenueChange,
-                isPositive: isRevenuePositive,
-                period
-            },
-            {
-                title: 'Active Rentals',
-                value: currentActiveRentals.toString(),
-                change: rentalsChange,
-                isPositive: isRentalsPositive,
-                period
-            },
-            {
-                title: 'Total Users',
-                value: currentTotalUsers.toString(),
-                change: usersChange,
-                isPositive: isUsersPositive,
-                period
-            },
-            {
-                title: 'Avg. Rating',
-                value: currentAvgRating.toFixed(1),
-                change: ratingsChange,
-                isPositive: isRatingPositive,
-                period
-            },
-        ];
-
-        res.json({ success: true, stats });
-    } catch (error) {
-        console.error('Error fetching dashboard stats:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-};
-
-export const getRevenue = async (req, res) => {
-    try {
-        const { period = 'weekly' } = req.query;
-        const now = new Date();
-        let groupBy, startDate, labels = [];
-
-        switch (period) {
-            case 'weekly':
-                startDate = new Date(now);
-                startDate.setDate(startDate.getDate() - 7);
-                groupBy = { $dayOfWeek: "$createdAt" };
-
-                // Generate last 7 days (Sunday to Saturday)
-                labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-                break;
-
-            case 'monthly':
-                startDate = new Date(now);
-                startDate.setMonth(startDate.getMonth() - 6);
-                groupBy = { $month: "$createdAt" };
-
-                // Generate last 6 months
-                const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-                for (let i = 5; i >= 0; i--) {
-                    let month = new Date();
-                    month.setMonth(now.getMonth() - i);
-                    labels.push(monthNames[month.getMonth()]);
-                }
+                previousPeriodEnd = new Date(currentPeriodStart);
+                previousPeriodEnd.setMilliseconds(previousPeriodEnd.getMilliseconds() - 1);
                 break;
 
             case 'yearly':
-                startDate = new Date(now);
-                startDate.setFullYear(startDate.getFullYear() - 5);
-                groupBy = { $year: "$createdAt" };
+                // Current year
+                currentPeriodStart = new Date(currentDate.getFullYear(), 0, 1);
 
-                // Generate last 5 years
-                for (let i = 5; i >= 1; i--) {
-                    labels.push((now.getFullYear() - i).toString());
-                }
-                labels.push(now.getFullYear().toString());
+                // Previous year
+                previousPeriodStart = new Date(currentDate.getFullYear() - 1, 0, 1);
+                previousPeriodEnd = new Date(currentDate.getFullYear(), 0, 0);
                 break;
 
-            default:
-                startDate = new Date(now);
-                startDate.setDate(startDate.getDate() - 7);
-                groupBy = { $dayOfWeek: "$createdAt" };
-                labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-        }
-
-        const revenueData = await Agreement.aggregate([
-            { $match: { createdAt: { $gte: startDate } } },
-            {
-                $group: {
-                    _id: groupBy,
-                    revenue: { $sum: "$total" }
-                }
-            },
-            { $sort: { _id: 1 } }
-        ]);
-
-        // Map database results to an object for quick lookup
-        let revenueMap = new Map(revenueData.map(item => [item._id, item.revenue]));
-
-        // Fill missing periods with zero revenue
-        let formattedData = labels.map((label, index) => ({
-            period: label,
-            revenue: revenueMap.get(index + 1) || revenueMap.get(parseInt(label)) || 0
-        }));
-
-        res.json({ success: true, data: formattedData });
-
-    } catch (error) {
-        console.error('Error fetching revenue data:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
-    }
-};
-
-
-
-// /**
-//  * @route   GET /api/dashboard/category-trends
-//  * @desc    Get rental trends by category
-//  * @access  Private (Admin)
-export const categoryTrends = async(req, res) => {
-    try {
-        const { period } = req.query;
-        const now = new Date();
-        let groupBy, startDate, dateFormat;
-
-        switch (period) {
-            case 'weekly':
-                startDate = new Date(now);
-                startDate.setDate(startDate.getDate() - 7);
-                groupBy = {
-                    day: { $dayOfWeek: "$createdAt" },
-                    category: "$product.category"
-                };
-                break;
             case 'monthly':
-                startDate = new Date(now);
-                startDate.setMonth(startDate.getMonth() - 6);
-                groupBy = {
-                    month: { $month: "$createdAt" },
-                    category: "$product.category"
-                };
-                break;
-            case 'yearly':
-                startDate = new Date(now);
-                startDate.setFullYear(startDate.getFullYear() - 5);
-                groupBy = {
-                    year: { $year: "$createdAt" },
-                    category: "$product.category"
-                };
-                break;
             default:
-                startDate = new Date(now);
-                startDate.setDate(startDate.getDate() - 7);
-                groupBy = {
-                    day: { $dayOfWeek: "$createdAt" },
-                    category: "$product.category"
-                };
+                // Current month
+                currentPeriodStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+
+                // Previous month
+                previousPeriodStart = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+                previousPeriodEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0);
+                break;
         }
 
-        const categoryTrends = await Request.aggregate([
+        // Set current period end to current date (for all periods)
+        currentPeriodEnd = currentDate
+
+        // 1. Revenue stats with time period filtering
+        const revenueStats = await Request.aggregate([
             {
                 $match: {
-                    createdAt: { $gte: startDate },
-                    status: { $in: ['approved', 'done', 'returned'] }
+                    status: { $in: ["returned", "done"] },
+                    isDeleted: false
                 }
             },
-            {
-                $lookup: {
-                    from: 'products',
-                    localField: 'product',
-                    foreignField: '_id',
-                    as: 'product'
-                }
-            },
-            { $unwind: '$product' },
             {
                 $group: {
-                    _id: groupBy,
-                    count: { $sum: 1 }
+                    _id: null,
+                    currentPeriodRevenue: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $gte: ["$createdAt", currentPeriodStart] },
+                                        { $lte: ["$createdAt", currentPeriodEnd] }
+                                    ]
+                                },
+                                "$total",
+                                0
+                            ]
+                        }
+                    },
+                    previousPeriodRevenue: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $gte: ["$createdAt", previousPeriodStart] },
+                                        { $lte: ["$createdAt", previousPeriodEnd] }
+                                    ]
+                                },
+                                "$total",
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        // 2. Active rentals - current period
+        const activeRentals = await Request.countDocuments({
+            status: "approved",
+            isDeleted: false,
+            "dateRange.startDate": { $lte: currentPeriodEnd },
+            "dateRange.endDate": { $gte: currentPeriodStart }
+        });
+
+        // Previous period active rentals
+        const previousActiveRentals = await Request.countDocuments({
+            status: "approved",
+            isDeleted: false,
+            "dateRange.startDate": { $lte: previousPeriodEnd },
+            "dateRange.endDate": { $gte: previousPeriodStart }
+        });
+
+        // 3. User stats - new users in the current period
+        const totalUsers = await User.countDocuments({ isDeleted: false });
+
+        const newUsers = await User.countDocuments({
+            isDeleted: false,
+            createdAt: { $gte: currentPeriodStart, $lte: currentPeriodEnd }
+        });
+
+        const prevPeriodNewUsers = await User.countDocuments({
+            isDeleted: false,
+            createdAt: { $gte: previousPeriodStart, $lte: previousPeriodEnd }
+        });
+
+        // 4. Rating stats - updated in the current period
+        const ratingsData = await Product.aggregate([
+            {
+                $match: {
+                    isDeleted: false,
+                    rating: { $exists: true, $ne: null }
                 }
             },
             {
-                $project: {
-                    _id: 0,
-                    timePeriod: "$_id.day" || "$_id.month" || "$_id.year",
-                    category: "$_id.category",
-                    count: 1
+                $group: {
+                    _id: null,
+                    averageRating: { $avg: "$rating" }
                 }
-            },
-            { $sort: { timePeriod: 1 } }
+            }
         ]);
 
-        // Transform data for chart format
-        // First get unique categories and time periods
-        const categories = [...new Set(categoryTrends.map(item => item.category))];
-        let timePeriods;
+        // Ratings updated in previous period
+        const prevRatingsData = await Product.aggregate([
+            {
+                $match: {
+                    isDeleted: false,
+                    rating: { $exists: true, $ne: null },
+                    updatedAt: { $gte: previousPeriodStart, $lte: previousPeriodEnd }
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    averageRating: { $avg: "$rating" }
+                }
+            }
+        ]);
 
-        switch (period) {
-            case 'weekly':
-                timePeriods = [
-                    { id: 1, name: 'Sun' },
-                    { id: 2, name: 'Mon' },
-                    { id: 3, name: 'Tue' },
-                    { id: 4, name: 'Wed' },
-                    { id: 5, name: 'Thu' },
-                    { id: 6, name: 'Fri' },
-                    { id: 7, name: 'Sat' }
-                ];
-                break;
-            case 'monthly':
-                timePeriods = [
-                    { id: 1, name: 'Jan' }, { id: 2, name: 'Feb' }, { id: 3, name: 'Mar' },
-                    { id: 4, name: 'Apr' }, { id: 5, name: 'May' }, { id: 6, name: 'Jun' },
-                    { id: 7, name: 'Jul' }, { id: 8, name: 'Aug' }, { id: 9, name: 'Sep' },
-                    { id: 10, name: 'Oct' }, { id: 11, name: 'Nov' }, { id: 12, name: 'Dec' }
-                ];
-                break;
-            case 'yearly':
-                // For yearly, extract years from the data
-                const years = [...new Set(categoryTrends.map(item => item.timePeriod))].sort();
-                timePeriods = years.map(year => ({ id: year, name: year.toString() }));
-                break;
+        // Calculate percentage changes
+        let revenueChange = 0;
+        let currentPeriodRevenue = 0;
+        if (revenueStats.length > 0) {
+            currentPeriodRevenue = revenueStats[0].currentPeriodRevenue;
+            const previousPeriodRevenue = revenueStats[0].previousPeriodRevenue;
+
+            if (previousPeriodRevenue > 0) {
+                revenueChange = ((currentPeriodRevenue - previousPeriodRevenue) / previousPeriodRevenue) * 100;
+            } else {
+                revenueChange = currentPeriodRevenue > 0 ? 100 : 0;
+            }
         }
 
-        // Create formatted data for chart
-        const formattedData = timePeriods.map(tp => {
-            const dataPoint = { period: tp.name };
+        let rentalChange = 0;
+        if (previousActiveRentals > 0) {
+            rentalChange = ((activeRentals - previousActiveRentals) / previousActiveRentals) * 100;
+        } else {
+            rentalChange = activeRentals > 0 ? 100 : 0;
+        }
 
-            categories.forEach(category => {
-                const match = categoryTrends.find(
-                    item => item.timePeriod === tp.id && item.category === category
-                );
-                dataPoint[category] = match ? match.count : 0;
-            });
+        let userChange = 0;
+        if (prevPeriodNewUsers > 0) {
+            userChange = ((newUsers - prevPeriodNewUsers) / prevPeriodNewUsers) * 100;
+        } else {
+            userChange = newUsers > 0 ? 100 : 0;
+        }
 
-            return dataPoint;
+        let averageRating = 0;
+        let ratingChange = 0;
+        if (ratingsData.length > 0) {
+            averageRating = parseFloat(ratingsData[0].averageRating?.toFixed(1)) || 0;
+
+            if (prevRatingsData.length > 0) {
+                const prevAvgRating = prevRatingsData[0].averageRating || 0;
+                if (prevAvgRating > 0) {
+                    ratingChange = ((averageRating - prevAvgRating) / prevAvgRating) * 100;
+                } else {
+                    ratingChange = averageRating > 0 ? 100 : 0;
+                }
+            }
+        }
+
+        // Format the response according to your dashboard needs
+        return res.status(200).json({
+            timePeriod,
+            revenue: {
+                total: Math.round(currentPeriodRevenue),
+                percentageChange: parseFloat(revenueChange.toFixed(1))
+            },
+            activeRentals: {
+                count: activeRentals,
+                percentageChange: parseFloat(rentalChange.toFixed(1))
+            },
+            users: {
+                total: totalUsers,
+                percentageChange: parseFloat(userChange.toFixed(1))
+            },
+            rating: {
+                average: averageRating,
+                percentageChange: parseFloat(ratingChange.toFixed(1))
+            }
         });
 
-        res.json({ success: true, data: formattedData });
     } catch (error) {
-        console.error('Error fetching category trends:', error);
-        res.status(500).json({ success: false, message: 'Server error' });
+        console.error('Error fetching dashboard stats:', error);
+        return res.status(500).json({ message: 'Server error' });
     }
-};
-
-// /**
-//  * @route   GET /api/dashboard/rental-trends
-//  * @desc    Get active vs completed rental trends
-//  * @access  Private (Admin)
-//  */
-// router.get('/rental-trends', async (req, res) => {
-//     try {
-//         const now = new Date();
-//         const startDate = new Date(now);
-//         startDate.setDate(startDate.getDate() - 30); // Last 30 days
-
-//         // Get daily active and completed rentals
-//         const rentalData = await Request.aggregate([
-//             {
-//                 $match: {
-//                     createdAt: { $gte: startDate }
-//                 }
-//             },
-//             {
-//                 $project: {
-//                     dateStr: { $dateToString: { format: "%d/%m", date: "$createdAt" } },
-//                     isActive: {
-//                         $in: ["$status", ["pending", "approved"]]
-//                     },
-//                     isCompleted: {
-//                         $in: ["$status", ["done", "returned"]]
-//                     }
-//                 }
-//             },
-//             {
-//                 $group: {
-//                     _id: "$dateStr",
-//                     active: { $sum: { $cond: ["$isActive", 1, 0] } },
-//                     completed: { $sum: { $cond: ["$isCompleted", 1, 0] } }
-//                 }
-//             },
-//             {
-//                 $project: {
-//                     _id: 0,
-//                     date: "$_id",
-//                     active: 1,
-//                     completed: 1
-//                 }
-//             },
-//             { $sort: { date: 1 } }
-//         ]);
-
-//         res.json({ success: true, data: rentalData });
-//     } catch (error) {
-//         console.error('Error fetching rental trends:', error);
-//         res.status(500).json({ success: false, message: 'Server error' });
-//     }
-// });
-
-// /**
-//  * @route   GET /api/dashboard/rating-distribution
-//  * @desc    Get rating distribution (1-5 stars)
-//  * @access  Private (Admin)
-//  */
-// router.get('/rating-distribution', async (req, res) => {
-//     try {
-//         const ratingDistribution = await Review.aggregate([
-//             { $match: { isDeleted: false } },
-//             {
-//                 $group: {
-//                     _id: "$rating",
-//                     count: { $sum: 1 }
-//                 }
-//             },
-//             {
-//                 $project: {
-//                     _id: 0,
-//                     rating: { $concat: [{ $toString: "$_id" }, "★"] },
-//                     count: 1
-//                 }
-//             },
-//             { $sort: { rating: -1 } }
-//         ]);
-
-//         // Make sure all ratings 1-5 are represented
-//         const ratings = ["5★", "4★", "3★", "2★", "1★"];
-//         const formattedData = ratings.map(rating => {
-//             const found = ratingDistribution.find(r => r.rating === rating);
-//             return {
-//                 rating,
-//                 count: found ? found.count : 0
-//             };
-//         });
-
-//         res.json({ success: true, data: formattedData });
-//     } catch (error) {
-//         console.error('Error fetching rating distribution:', error);
-//         res.status(500).json({ success: false, message: 'Server error' });
-//     }
-// });
-
-// /**
-//  * @route   GET /api/dashboard/category-distribution
-//  * @desc    Get products by category distribution
-//  * @access  Private (Admin)
-//  */
-// router.get('/category-distribution', async (req, res) => {
-//     try {
-//         const categoryDistribution = await Product.aggregate([
-//             {
-//                 $group: {
-//                     _id: "$category",
-//                     value: { $sum: 1 }
-//                 }
-//             },
-//             {
-//                 $project: {
-//                     _id: 0,
-//                     name: "$_id",
-//                     value: 1
-//                 }
-//             },
-//             { $sort: { value: -1 } },
-//             { $limit: 4 } // Get top 4 categories
-//         ]);
-
-//         res.json({ success: true, data: categoryDistribution });
-//     } catch (error) {
-//         console.error('Error fetching category distribution:', error);
-//         res.status(500).json({ success: false, message: 'Server error' });
-//     }
-// });
-
-// export default router;
+});

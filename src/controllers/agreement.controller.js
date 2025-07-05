@@ -17,9 +17,9 @@ export const getRentalAgreements = asyncErrorHandler(async (req, res, next) => {
     return res.status(200).json({ data: allRequest });
 })
 
-export const returnProduct = asyncErrorHandler(async (req, res, next)=>{
-    const {agreementId} = req.body;
+export const returnProduct = asyncErrorHandler(async (req, res, next) => {
+    const { agreementId } = req.body;
     const userId = req.userDetails._id;
-    const agreement = await Agreement.findOne({_id:agreementId}).lean();
-    
+    const agreement = await Agreement.findOne({ _id: agreementId }).lean();
+
 })

@@ -1,33 +1,34 @@
-import express from 'express';
-import cookieParser from 'cookie-parser';
-import cors from 'cors';
-import connect from './configs/connection.js'
+// src/server.js
+import http from 'http';
+import { Server } from 'socket.io';
+import app from './app.js';
+import connect from './configs/connection.js';
 import envConfig from './configs/envConfig.js';
-import { globalErrorHandler } from './services/common.service.js';
-import indexRoutes from './routes/index.js'
-import { fixedWindowRateLimit } from './middlewares/rateLimit.middelware.js';
+import { socketHandler } from './socket/socketHandler.js';
 
 envConfig();
-const app = express();
 const PORT = process.env.PORT || 5000;
 
-// db connection
+// Connect to DB
 connect();
 
-// app.use('/src',express.static('src'));
-app.use(express.json());
-app.use(cookieParser());
-app.use(cors({
-    origin: [process.env.React_API, 'http://192.168.29.228:5173'],
-    credentials: true
-}));
+// Create server and bind Socket.IO
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: [process.env.React_API, 'http://192.168.29.228:5173'],
+        methods: ['GET', 'POST', 'PATCH', 'PUT'],
+        credentials: true
+    }
+});
 
-app.use(fixedWindowRateLimit)
-app.use('/api', indexRoutes);
+// Attach io to app
+app.set('io', io);
 
-app.use(globalErrorHandler);
+// Register socket handlers
+socketHandler(io);
 
-// server starting
-app.listen(PORT, () => {
-    console.log(`listening from port ${PORT}`);
-})
+// Start the server
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});

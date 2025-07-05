@@ -5,6 +5,7 @@ import CustomError from "../utils/customError.js";
 import mongoose, { isValidObjectId } from "mongoose";
 import User from "../models/user.model.js";
 import Redis from "ioredis";
+import { notifyUsers } from "./notification.controller.js";
 const redis = new Redis();
 export const addProduct = asyncErrorHandler(async (req, res, next) => {
     const { payload } = req.body;
@@ -25,13 +26,15 @@ export const addProduct = asyncErrorHandler(async (req, res, next) => {
     };
 
     await Product.create(productObj);
+    await redis.del('product:all')
     return res.status(201).json({
         data: "Product added successfully!"
     });
 })
 
 export const getProducts = asyncErrorHandler(async (req, res, next) => {
-    const { category, searchTerm } = req.query
+    const { category, searchTerm, isMyProducts = false } = req.query
+    const userId = req.userDetails?._id
     let cacheData;
     // if (!searchTerm && !category) {
     //     cacheData = JSON.parse(await redis.get('product:all'));
@@ -73,7 +76,8 @@ export const getProducts = asyncErrorHandler(async (req, res, next) => {
                         ]
                     },
                     {
-                        category: category ?? { $exists: true }
+                        category: category ?? { $exists: true },
+                        'owner._id': { ...(isMyProducts ? { $eq: userId } : { $ne: userId }) }
                     }
                 ]
             }
@@ -87,16 +91,21 @@ export const getProducts = asyncErrorHandler(async (req, res, next) => {
                 pricePerDay: 1,
                 pricePerWeek: 1,
                 pricePerMonth: 1,
+                securityDeposit: 1,
                 buyDate: 1,
+                isAvailable: 1,
                 bookedSlots: 1,
                 address: { city: '$address.city', state: '$address.state' },
-                owner: { name: '$owner.name' }
+                owner: { name: '$owner.name' },
+                createdAt: 1,
+                updatedAt: 1
             }
         }
     ])
     // if (!searchTerm && !category && !cacheData) {
     //     await redis.set('product:all', JSON.stringify(productsQuery));
     // }
+
     return res.status(200).json({
         data: productsQuery
     })
@@ -147,5 +156,27 @@ export const getWishlist = asyncErrorHandler(async (req, res, next) => {
     const userId = req.userDetails._id;
     const user = await User.findById(userId).select('+wishlist');
     return res.json({ success: true, data: user.wishlist });
+})
+
+export const updateProduct = asyncErrorHandler(async (req, res, next) => {
+    const { productId } = req.params;
+    const { description, pricePerDay, pricePerWeek, pricePerMonth, isAvailable } = req.body;
+    console.log(isAvailable)
+    const updateData = {
+        ...(description && { description }),
+        ...(pricePerDay && { pricePerDay }),
+        ...(pricePerWeek && { pricePerWeek }),
+        ...(pricePerMonth && { pricePerMonth }),
+        ...(isAvailable !== undefined && { isAvailable })
+    }
+    console.log(updateData)
+    const product = await Product.findOne({ _id: productId });
+    if (!product) {
+        const error = new CustomError("Product Not Found!", 400);
+        next(error);
+    }
+    await Product.updateOne({ _id: productId }, { $set: updateData })
+    if (isAvailable) notifyUsers(productId)
+    return res.json({ success: true, data: "Product Updated!" });
 })
 

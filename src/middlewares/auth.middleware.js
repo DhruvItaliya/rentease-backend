@@ -19,4 +19,17 @@ const auth = asyncErrorHandler(async (req, res, next) => {
     return next(error);
 })
 
+export const optionalAuth = asyncErrorHandler(async (req, res, next) => {
+    const token = req.headers?.authorization?.split(" ")[1];
+    if (token) {
+        const verifyUser = await jwt.verify(token, process.env.SECRET_KEY);
+
+        const user = await User.findOne({ _id: verifyUser._id }).lean();
+        if (user) {
+            req.userDetails = user;
+        }
+    }
+    return next();
+})
+
 export default auth;

@@ -4,13 +4,11 @@ import Review from "../models/review.model.js";
 import { addToBatch } from "../services/queue.service.js";
 
 export const getReivews = asyncErrorHandler(async (req, res, next) => {
-    const userId = req.userDetails._id;
     const { productId } = req.query;
-    console.log(productId)
     if (!isValidObjectId(productId)) {
         return sendError(next, "Product Not Found!", 400);
     }
-    const reviews = await Review.find({ user: userId, product: productId }).populate('user', 'name');
+    const reviews = await Review.find({product: productId }).populate('user', 'name');
     return sendSuccess(res, reviews, 200);
 })
 
